@@ -1,0 +1,161 @@
+---
+title: "Final Project"
+author: "Manseeb Hossain"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    self_contained: true
+---
+
+## Preprocessing
+
+## Figures
+
+### QC Metrics
+
+```{r qc-metrics-plots, echo=FALSE, out.width="100%", results='asis'}
+img_dir <- file.path(getwd(), "results")
+knitr::include_graphics(file.path(img_dir, c(
+  "highly_variable_features.png", 
+  "pca_plot_by_sample.png",
+  "elbow_plot.png"
+)))
+
+```
+
+### Doublet Detection Summary
+
+```{r doublet-summary, echo=FALSE}
+doublet_summary <- read.csv(file.path(getwd(), "results", "doublet_summary_table.csv"))
+knitr::kable(doublet_summary, caption = "Summary of Detected Doublets by Sample")
+```
+
+### Pre/Post Filtering Summary
+
+```{r qc-summary, echo=FALSE}
+qc_summary <- read.csv(file.path(getwd(), "results", "qc_summary_table.csv"))
+knitr::kable(qc_summary, caption = "Number of Cells and Genes Before and After Filtering")
+```
+Discussion: 
+We applied filtering thresholds of >500 genes per cell, >800 total counts, and <10% mitochondrial content to remove low-quality or stressed cells, based on QC metric distributions and violin plots. Additionally, 2,036 predicted doublets (~3% of the dataset) were excluded to avoid confounding downstream analysis. This resulted in a high-quality dataset of 67,851 single cells across seven samples. In the literature, objective strategies such as median absolute deviation (MAD), EmptyDrops, and Gaussian mixture models have been proposed to set thresholds without relying on visual inspection. These methods improve reproducibility and are especially useful for large-scale single-cell workflows.
+
+## Normalization Procedure
+
+Filtering Thresholds and Rationale
+
+To ensure high-quality cells for downstream analysis, we applied the following filtering thresholds:
+- **Minimum genes per cell:** 200
+- **Maximum genes per cell:** 6,000
+- **Maximum percent mitochondrial reads:** 10%
+- **Doublet removal:** Cells identified by the doublet detection algorithm (predicted doublets) were excluded.
+
+To ensure high-quality single-cell data, we filtered cells based on common thresholds: >200 genes, <6,000 genes, <10% mitochondrial content, and removed predicted doublets (~3%). This reduced noise from low-quality or multiplet cells, leaving 67,851 high-confidence cells across all samples. These thresholds were selected based on distribution plots but are also supported by objective methods like MAD, EmptyDrops, and Gaussian mixture models. We normalized the data using Seurat's LogNormalize method to scale and log-transform counts, reducing technical variability and preparing the dataset for downstream analysis.
+
+## Feature Selection
+
+```{r feature, echo=FALSE, out.width="100%", results='asis'}
+img_dir <- file.path(getwd(), "results")
+knitr::include_graphics(file.path(img_dir, c("highly_variable_features.png")))
+```
+Discussion: 
+
+We used Seurat’s FindVariableFeatures() function with the "vst" method to identify the top 2,000 highly variable genes based on standardized variance. This approach selects genes that exhibit more variability than expected given their average expression, enhancing the biological signal in downstream analyses. Of the total 33,538 genes, 2,000 were classified as highly variable and used for dimensionality reduction.
+
+
+## PCA
+
+```{r elbow, echo=FALSE, out.width="100%", results='asis'}
+knitr::include_graphics("results/elbow_plot.png")
+```
+Discussion: 
+
+
+## Clustering
+
+```{r umap-plots, echo=FALSE, out.width="100%", results='asis'}
+img_dir <- file.path(getwd(), "results")
+knitr::include_graphics(file.path(img_dir, c(
+  "umap_by_sample.png", 
+  "umap_clusters.png", 
+  "umap_samples.png"
+))) 
+```
+Discussion:
+
+We clustered the cells using Seurat’s graph-based clustering approach with a resolution of 0.8, which resulted in 16 distinct clusters. Visualization with UMAP shows well-separated clusters labeled in the umap_clusters.png plot. According to our QC summary, the dataset contains a total of 67,851 cells across seven samples, with sample sizes ranging from 1,688 to 18,713 cells. The UMAP colored by sample origin (umap_by_sample.png) shows clear batch separation between samples. Given the visible sample-specific grouping, we will consider performing data integration to mitigate potential batch effects and improve biological interpretability.
+
+
+## Marker Gene Analysis
+
+```{r top-markers-table, echo=FALSE}
+top5 <- read.csv("results/top5_markers_per_cluster.csv")
+knitr::kable(top5, caption = "Top 5 Marker Genes for Each Cluster")
+```
+
+Discussion:
+
+We performed marker gene analysis using the Wilcoxon rank sum test, as implemented in Seurat’s `FindAllMarkers()` function. This method identifies genes that are significantly more highly expressed in each cluster relative to all others.
+
+
+```{r marker-heatmap, echo=FALSE, out.width="80%", results='asis'}
+knitr::include_graphics("results/heatmap_top_markers.png")
+```
+
+## Manual Labeling & Plots
+
+```{r cluster, echo=FALSE, out.width="100%", results='asis'}
+img_dir <- file.path(getwd(), "results")
+knitr::include_graphics(file.path(img_dir, c(
+  "manual_top5_heatmap.png", 
+  "vln_cluster_0.png", 
+  "vln_cluster_1.png",
+  "vln_cluster_2.png",
+  "feature_cluster_0.png",
+  "feature_cluster_1.png",
+  "feature_cluster_2.png"
+))) 
+```
+Discussion
+
+We used the Wilcoxon rank sum test to identify marker genes for each cluster. This test is commonly used in single-cell RNA-seq analysis due to its robustness to non-normal distributions and outliers, making it well-suited to sparse single-cell data.
+An advantage of this method is its simplicity and interpretability. However, it may have limited power in detecting subtle gene expression differences and can be conservative when many cells have zero counts for a given gene.
+
+To assign cell type identities to each cluster, we reviewed the top marker genes and compared them to established gene signatures reported in hepatoblastoma studies. Clusters with high expression of genes such as GPC3, DLK1, and HMGA2 were labeled as tumor cells, as these markers are commonly associated with proliferative, fetal-like hepatoblasts in hepatoblastoma. Clusters enriched for CYP3A4, ALB, and HPGD were annotated as hepatocytes, given their role in mature liver function. We identified endothelial cells based on expression of vascular markers like FLT1 and PECAM1, while clusters expressing COL3A1 and COL6A3 were labeled as hepatic stellate cells due to their association with extracellular matrix production. Immune-related clusters were identified by the presence of markers such as PTPRC, CD3D, CD163, and CD68, allowing us to distinguish between T/NK cells, B cells, and macrophage-like Kupffer cells. A subset of cells expressing KRT19 and EPCAM was annotated as cholangiocytes. Some clusters remained ambiguous due to mixed or intermediate marker expression, and were labeled accordingly. These assignments are supported by findings from Zhang et al. (2022), who performed similar cell type classification in hepatoblastoma using single-cell RNA sequencing
+
+
+
+## First Replicate: Cell Proportion Analysis
+
+```{r proportioncell, echo=FALSE, out.width="80%", results='asis'}
+knitr::include_graphics("results/cell_type_proportions_by_sample.png")
+```
+Discussion
+
+In our the single-cell RNA-seq dataset, it was observed that there is a prominent representation of tumor cells, suggesting that transformed hepatoblast-like populations dominate the cellular composition of these hepatoblastoma samples. This aligns with previous studies indicating that hepatoblastoma tumors are often composed of immature hepatic progenitor-like cells that express markers such as GPC3 and DLK1, reflective of their fetal liver origin and proliferative capacity [Zhang et al., 2022, DOI: 10.1038/s42003-021-02562-8]. Hepatocytes and endothelial cells were also well represented, which may reflect both residual normal tissue and tumor-associated microenvironments. The presence of Kupffer cells, NK/T cells, and B cells underscores the role of the immune microenvironment in hepatoblastoma, with recent studies suggesting that tumor-associated macrophages and lymphocyte infiltration may influence prognosis and treatment response [Chen et al., 2020, DOI: 10.1158/1078-0432.CCR-20-1255]. The detection of cholangiocytes and stellate cells further highlights the cellular heterogeneity of the liver and suggests that non-parenchymal cells may contribute to tumor development or fibrosis within the tumor niche. These proportions provide a high-resolution view of the hepatoblastoma microenvironment and set the stage for further subtype- and cell-type-specific analyses.
+
+
+
+## Second Replicate: Cell Signaling
+
+```{r cellsignal, echo=FALSE, out.width="80%", results='asis'}
+knitr::include_graphics("results/simple_cell_signaling_network.png")
+```
+Discussion
+
+To explore how different cell populations interact within the hepatoblastoma tumor microenvironment, we generated a simplified network highlighting predicted signaling pathways among major cell types. The network revealed notable communication from tumor cells to both immune and endothelial populations, suggesting possible mechanisms of tumor-induced angiogenesis and immune modulation. Additionally, stromal cells, such as stellate cells, appeared to interact with both tumor and vascular cell types, aligning with their known roles in structural remodeling and tissue support. These observations echo patterns reported by Liu et al. (2022), who identified enriched pathways like CXCL and WNT as central to tumor progression in hepatoblastoma (Communications Biology, DOI: 10.1038/s42003-021-02562-8). Overall, this analysis provides an overview of key signaling relationships that may influence tumor behavior and the surrounding cellular landscape.
+
+
+
+## Personal Analysis: Cell Cycle Phase Analysis
+
+```{r cellcycle, echo=FALSE, out.width="100%", results='asis'}
+img_dir <- file.path(getwd(), "results")
+knitr::include_graphics(file.path(img_dir, c(
+  "vln_cell_cycle_scores.png", 
+  "umap_cell_cycle_phase.png"
+))) 
+```
+Discussion: 
+
+There is analysis of the cell cycle phase distributions across clusters to investigate proliferative activity in the tumor microenvironment. Clusters enriched for S or G2/M phase suggest populations undergoing active division, which may indicate proliferating tumor or progenitor cells. This information complements existing annotations and may help identify subpopulations with stem-like or aggressive characteristics. Similar approaches have been used to reveal proliferative states in tumor scRNA-seq datasets (Macosko et al., 2015). Future work could explore how these proliferative clusters respond to treatment or correlate with prognosis.
+
